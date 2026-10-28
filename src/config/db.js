@@ -1,31 +1,40 @@
 const mongoose = require("mongoose");
 
-let isConnected = false;
+let cached = global.mongoose;
+
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
 
 const connectDB = async () => {
-  if (isConnected || mongoose.connection.readyState >= 1) {
-    return;
+  if (cached.conn && mongoose.connection.readyState >= 1) {
+    return cached.conn;
+  }
+
+  const mongoUri = process.env.MONGODB_URI;
+  if (!mongoUri) {
+    throw new Error("MONGODB_URI is not defined in environment variables");
+  }
+
+  if (!cached.promise) {
+    const opts = {
+      serverSelectionTimeoutMS: 5000,
+    };
+
+    cached.promise = mongoose.connect(mongoUri, opts).then((m) => {
+      console.log(`MongoDB connected: ${m.connection.host}`);
+      return m;
+    });
   }
 
   try {
-    const mongoUri = process.env.MONGODB_URI;
-    if (!mongoUri) {
-      console.error("FATAL: MONGODB_URI environment variable is not defined!");
-      if (!process.env.VERCEL) {
-        process.exit(1);
-      }
-      return;
-    }
-
-    const conn = await mongoose.connect(mongoUri);
-    isConnected = true;
-    console.log(`MongoDB connected: ${conn.connection.host}`);
-  } catch (error) {
-    console.error(`MongoDB connection error: ${error.message}`);
-    if (!process.env.VERCEL) {
-      process.exit(1);
-    }
+    cached.conn = await cached.promise;
+  } catch (e) {
+    cached.promise = null;
+    throw e;
   }
+
+  return cached.conn;
 };
 
 module.exports = connectDB;

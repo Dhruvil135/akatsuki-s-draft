@@ -6,9 +6,6 @@ const cors = require("cors");
 const path = require("path");
 const connectDB = require("./config/db");
 
-// Connect to MongoDB
-connectDB();
-
 const app = express();
 
 // Middleware
@@ -22,13 +19,7 @@ const uploadsDir = process.env.VERCEL
   : path.join(__dirname, "..", "uploads");
 app.use("/uploads", express.static(uploadsDir));
 
-// Routes
-app.use("/auth", require("./routes/authRoutes"));
-app.use("/posts", require("./routes/postRoutes"));
-app.use("/admin", require("./routes/adminRoutes"));
-app.use("/ai", require("./routes/aiRoutes"));
-
-// Health check
+// Health check (does not require DB)
 app.get("/", (req, res) => {
   res.json({
     message: "Akatsuki's Draft API is running",
@@ -36,6 +27,26 @@ app.get("/", (req, res) => {
     platform: process.env.VERCEL ? "vercel-serverless" : "standalone",
   });
 });
+
+// Ensure MongoDB is connected before handling any API routes
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error("Database connection error in request:", err.message);
+    return res.status(500).json({
+      message: "Database connection failed",
+      error: err.message,
+    });
+  }
+});
+
+// Routes
+app.use("/auth", require("./routes/authRoutes"));
+app.use("/posts", require("./routes/postRoutes"));
+app.use("/admin", require("./routes/adminRoutes"));
+app.use("/ai", require("./routes/aiRoutes"));
 
 // Global error handler
 app.use((err, req, res, next) => {
