@@ -17,7 +17,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve uploaded files statically
-app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
+const uploadsDir = process.env.VERCEL
+  ? path.join("/tmp", "uploads")
+  : path.join(__dirname, "..", "uploads");
+app.use("/uploads", express.static(uploadsDir));
 
 // Routes
 app.use("/auth", require("./routes/authRoutes"));
@@ -30,6 +33,7 @@ app.get("/", (req, res) => {
   res.json({
     message: "Akatsuki's Draft API is running",
     version: "1.0.0",
+    platform: process.env.VERCEL ? "vercel-serverless" : "standalone",
   });
 });
 
@@ -42,7 +46,12 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Internal server error", error: err.message });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Only start the HTTP listener if not running in a serverless environment (like Vercel)
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
